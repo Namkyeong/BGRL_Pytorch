@@ -1,7 +1,7 @@
 # BGRL_Pytorch
 Implementation of Bootstrapped Representation Learning on Graphs.
 
-
+A PyTorch implementation of "Bootstrapped Representation Learning on Graphs" paper, accepted in ICLR 2021 Workshop
 
 ## Notice
 Codes are borrowed from BYOL and SelfGNN
