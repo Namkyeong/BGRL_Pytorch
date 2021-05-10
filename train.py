@@ -31,7 +31,7 @@ class ModelTrainer:
         print(f"Data: {self._dataset.data}")
         hidden_layers = [int(l) for l in args.layers]
         layers = [self._dataset.data.x1.shape[1]] + hidden_layers
-        self._model = models.BGRL(layer_config=layers, dropout=args.dropout).to(self._device)
+        self._model = models.BGRL(layer_config=layers, dropout=args.dropout, epochs=args.epochs).to(self._device)
         print(self._model)
         self._optimizer = torch.optim.Adam(
             params=self._model.parameters(), lr=args.lr)

@@ -18,18 +18,16 @@ and slightly modified for BGRL
 
 
 class EMA:
-    def __init__(self, beta, epochs):
+    def __init__(self, beta):
         super().__init__()
         self.beta = beta
         self.step = 0
-        self.total_steps = epochs
 
     def update_average(self, old, new):
         if old is None:
             return new
         beta = 1 - (1 - self.beta) * (np.cos(np.pi * self.step / self.total_steps) + 1) / 2.0
-        self.step += 1
-        return old * beta + (1 - beta) * new
+        return old * self.beta + (1 - self.beta) * new
 
 
 def loss_fn(x, y):
@@ -73,22 +71,24 @@ class Encoder(nn.Module):
         rep_dim = layer_config[-1]
         self.dropout = dropout
         self.project = project
+        self.prelu = nn.ModuleList([nn.PReLU() for i in range(1, len(layer_config))])
         self.stacked_gnn = nn.ModuleList([GCNConv(layer_config[i-1], layer_config[i]) for i in range(1, len(layer_config))])
 
     def forward(self, x, edge_index, edge_weight=None):
-        for gnn in self.stacked_gnn:
+        for gnn, prelu in (zip(self.stacked_gnn, self.prelu)):
             x = gnn(x, edge_index, edge_weight=edge_weight)
+            x = prelu(x)
             x = F.dropout(x, p=self.dropout, training=self.training)
         return x
 
 
 class BGRL(nn.Module):
 
-    def __init__(self, layer_config, dropout=0.0, moving_average_decay=0.99, epochs=1000, **kwargs):
+    def __init__(self, layer_config, dropout=0.0, moving_average_decay=0.99, **kwargs):
         super().__init__()
         self.student_encoder = Encoder(layer_config=layer_config, dropout=dropout, **kwargs)
         self.teacher_encoder = None
-        self.teacher_ema_updater = EMA(moving_average_decay, epochs)
+        self.teacher_ema_updater = EMA(moving_average_decay)
         rep_dim = layer_config[-1]
         self.student_predictor = nn.Sequential(nn.Linear(rep_dim, rep_dim), nn.BatchNorm1d(rep_dim),
                                                nn.PReLU(), nn.Dropout(dropout))
