@@ -1,19 +1,20 @@
 # BGRL_Pytorch
 Implementation of Bootstrapped Representation Learning on Graphs.
 
-A PyTorch implementation of "<a href="https://arxiv.org/pdf/2102.06514.pdf">Bootstrapped Representation Learning on Graphs</a>" paper, accepted in ICLR 2021 Workshop
+A PyTorch implementation of "<a href="https://arxiv.org/pdf/2102.06514.pdf">Bootstrapped Representation Learning on Graphs</a>" paper, accepted in ICLR 2021 Workshop  
+<img src="img/model.PNG" width="700px"></img>
 
 ## Hyperparameters for training BGRL
 Following Options can be passed to `train.py`
 
 
-`--layers` or `-l`  
+`--layers:` or `-l:`
 one or more integer values specifying  the number of units for each GNN layer.  
 Default is 512 128
 `--layers 512 128`  
 
 
-`--aug_params` or `-p`  
+`--aug_params:` or `-p:`
 four float values specifying the hyperparameters for graph augmentation (p_f1, p_f2, p_e1, p_e2).  
 Default is 0.2 0.1 0.2 0.3
 `--layers 0.2 0.1 0.2 0.3`   
