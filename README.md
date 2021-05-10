@@ -14,7 +14,7 @@ Default is 512 128
 `--aug_params` or `-p`
 four float values specifying the hyperparameters for graph augmentation (p_f1, p_f2, p_e1, p_e2). 
 Default is 0.2 0.1 0.2 0.3  
-`--layers 0.2 0.1 0.2 0.3`  
+`--aug_params 0.2 0.1 0.2 0.3`  
 
 
 ## Codes borrowed from
