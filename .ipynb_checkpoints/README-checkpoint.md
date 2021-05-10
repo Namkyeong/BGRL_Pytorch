@@ -28,6 +28,7 @@ usage example : `--layers 0.2 0.1 0.2 0.3`
 |embedding size|256|128|256|256|128|
 |encoder hidden size|512|256|512|512|256|
 |predictor hidden size|512|512|512|512|512|
+* Hyperparameters are from original paper
 
 ## Codes borrowed from
 Codes are borrowed from BYOL and SelfGNN
