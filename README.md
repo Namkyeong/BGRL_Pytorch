@@ -7,14 +7,8 @@ A PyTorch implementation of "Bootstrapped Representation Learning on Graphs" pap
 Codes are borrowed from BYOL and SelfGNN
 
 
-| name        | Implementation Code | Paper   | 
-| ----------- | ----------- | ------- | 
-| `Bootstrap Your Own Latent`| <a href="https://github.com/lucidrains/byol-pytorch">Implementation</a>       | <a href="https://arxiv.org/pdf/2006.07733.pdf">Implementation</a>   |
-| `SelfGNN`| <a href="https://github.com/zekarias-tilahun/SelfGNN">SelfGNN Implementation</a>| <a href="https://arxiv.org/pdf/2103.14958.pdf">paper</a>   | 
-
-
-<a href="https://github.com/lucidrains/byol-pytorch">BYOL Implementation</a>
-
-
-<a href="https://github.com/zekarias-tilahun/SelfGNN">SelfGNN Implementation</a>
+| name        | Implementation Code | Paper   | Conference |
+| ----------- | ------------------- | ------- | ---------- | 
+| `Bootstrap Your Own Latent`| <a href="https://github.com/lucidrains/byol-pytorch">Implementation</a>       | <a href="https://arxiv.org/pdf/2006.07733.pdf">paper</a>   |
+| `SelfGNN`| <a href="https://github.com/zekarias-tilahun/SelfGNN">Implementation</a>| <a href="https://arxiv.org/pdf/2103.14958.pdf">paper</a>   | 
 
