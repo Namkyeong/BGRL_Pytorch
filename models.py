@@ -84,14 +84,14 @@ class Encoder(nn.Module):
 
 class BGRL(nn.Module):
 
-    def __init__(self, layer_config, dropout=0.0, moving_average_decay=0.99, epochs=1000, **kwargs):
+    def __init__(self, layer_config, pred_hid, dropout=0.0, moving_average_decay=0.99, epochs=1000, **kwargs):
         super().__init__()
         self.student_encoder = Encoder(layer_config=layer_config, dropout=dropout, **kwargs)
         self.teacher_encoder = None
         self.teacher_ema_updater = EMA(moving_average_decay, epochs)
         rep_dim = layer_config[-1]
-        self.student_predictor = nn.Sequential(nn.Linear(rep_dim, rep_dim), nn.BatchNorm1d(rep_dim),
-                                               nn.PReLU(), nn.Dropout(dropout))
+        self.student_predictor = nn.Sequential(nn.Linear(rep_dim, pred_hid), nn.PReLU(), nn.Dropout(dropout),
+                                            nn.Linear(pred_hid, rep_dim), nn.BatchNorm1d(rep_dim), nn.PReLU(), nn.Dropout(dropout))
 
     @singleton('teacher_encoder')
     def _get_teacher_encoder(self):

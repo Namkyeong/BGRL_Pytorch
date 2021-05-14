@@ -3,6 +3,9 @@ from torch_geometric.data import DataLoader
 import numpy as np
 
 import torch
+from tensorboardX import SummaryWriter
+
+torch.manual_seed(0)
 
 import models
 import utils
@@ -18,6 +21,7 @@ class ModelTrainer:
     def __init__(self, args):
         self._args = args
         self._init()
+        self.writer = SummaryWriter(log_dir="runs/BGRL_dataset({}) ".format(args.name))
 
     def _init(self):
         args = self._args
@@ -31,12 +35,19 @@ class ModelTrainer:
         print(f"Data: {self._dataset.data}")
         hidden_layers = [int(l) for l in args.layers]
         layers = [self._dataset.data.x1.shape[1]] + hidden_layers
-        self._model = models.BGRL(layer_config=layers, dropout=args.dropout, epochs=args.epochs).to(self._device)
+        self._model = models.BGRL(layer_config=layers, pred_hid=args.pred_hid, dropout=args.dropout, epochs=args.epochs).to(self._device)
         print(self._model)
         self._optimizer = torch.optim.Adam(
-            params=self._model.parameters(), lr=args.lr)
+            params=self._model.parameters(), lr=args.lr, weight_decay= 1e-5)
 
     def train(self):
+        # get initial test results
+        self.infer_embeddings()
+        dev_acc, test_acc = self.evaluate()
+        self.writer.add_scalar("accs/val_acc", dev_acc, 0)
+        self.writer.add_scalar("accs/test_acc", test_acc, 0)
+
+        # start training
         self._model.train()
         for epoch in range(self._args.epochs):
             for bc, batch_data in enumerate(self._loader):
@@ -51,10 +62,18 @@ class ModelTrainer:
                 sys.stdout.write('\rEpoch {}/{}, batch {}/{}, loss {:.4f}'.format(epoch + 1, self._args.epochs, bc + 1,
                                                                                   self._dataset.final_parts, loss.data))
                 sys.stdout.flush()
+            self.writer.add_scalar("loss/training_loss", loss, epoch)
             if (epoch + 1) % self._args.cache_step == 0:
                 path = osp.join(self._dataset.model_dir,
                                 f"model.ep.{epoch + 1}.pt")
                 torch.save(self._model.state_dict(), path)
+                self.infer_embeddings()
+                dev_acc, test_acc = self.evaluate()
+                
+                self.writer.add_scalar("accs/val_acc", dev_acc, epoch + 1)
+                self.writer.add_scalar("accs/test_acc", test_acc, epoch + 1)
+        
+        print()
         print("Training Done!")
         
     def infer_embeddings(self):
@@ -89,6 +108,7 @@ class ModelTrainer:
         """
         Used for producing the results of Experiment 3.2 in the BGRL paper. 
         """
+        print()
         print("Evaluating ...")
         emb_dim, num_class = self._embeddings.shape[1], self._labels.unique().shape[0]
         
@@ -114,20 +134,19 @@ class ModelTrainer:
             test_acc = (torch.sum(test_preds == self._labels[self._test_mask]).float() / self._labels[self._test_mask].shape[0]).detach().cpu().numpy()
             dev_accs.append(dev_acc * 100)
             test_accs.append(test_acc * 100)
-            print("Finished iteration {:02} of the logistic regression classifier. Validation accuracy {:.2f} test accuracy {:.2f}".format(i + 1, dev_acc, test_acc))
 
         dev_accs = np.stack(dev_accs)
         test_accs = np.stack(test_accs)
         
         print('Average validation accuracy: {:.2f} with std: {}'.format(dev_accs.mean(), dev_accs.std()))
         print('Average test accuracy: {:.2f} with std: {:.2f}'.format(test_accs.mean(), test_accs.std()))
-    
+
+        return dev_accs.mean(), test_accs.mean()
 
 def train_eval(args):
     trainer = ModelTrainer(args)
     trainer.train()
-    trainer.infer_embeddings()
-    trainer.evaluate()
+    trainer.writer.close()
 
 
 def main():

@@ -62,22 +62,24 @@ def parse_args():
                         help="Name of the dataset. Supported names are: cora, citeseer, pubmed, photo, computers, cs, and physics")
     parser.add_argument("--layers", "-l", nargs="+", default=[
                         512, 256], help="The number of units of each layer of the GNN. Default is [512, 128]")
+    parser.add_argument("--pred_hid", '-ph', type=int,
+                        default=512, help="The number of hidden units of layer of the predictor. Default is 512")
     parser.add_argument("--init-parts", "-ip", type=int, default=1,
                         help="The number of initial partitions. Default is 1. Applicable for ClusterSelfGNN")
     parser.add_argument("--final-parts", "-fp", type=int, default=1,
                         help="The number of final partitions. Default is 1. Applicable for ClusterSelfGNN")
     parser.add_argument("--aug_params", "-p", nargs="+", default=[
-                        0.2, 0.1, 0.2, 0.3], help="Hyperparameters for augmentation (p_f1, p_f2, p_e1, p_e2). Default is [0.2, 0.1, 0.2, 0.3]")
+                        0.3, 0.4, 0.3, 0.2], help="Hyperparameters for augmentation (p_f1, p_f2, p_e1, p_e2). Default is [0.2, 0.1, 0.2, 0.3]")
     parser.add_argument("--lr", '-lr', type=float, default=0.0001,
                         help="Learning rate. Default is 0.0001.")
     parser.add_argument("--dropout", "-do", type=float,
-                        default=0.2, help="Dropout rate. Default is 0.2")
-    parser.add_argument("--cache-step", '-cs', type=int, default=100,
+                        default=0.0, help="Dropout rate. Default is 0.2")
+    parser.add_argument("--cache-step", '-cs', type=int, default=10,
                         help="The step size to cache the model, that is, every cache_step the model is persisted. Default is 100.")
     parser.add_argument("--epochs", '-e', type=int,
                         default=1000, help="The number of epochs")
     parser.add_argument("--device", '-d', type=int,
-                        default=0, help="GPU to use")
+                        default=2, help="GPU to use")
     return parser.parse_args()
 
 
@@ -142,7 +144,7 @@ def create_masks(data):
         labels = data.y.numpy()
         counter = Counter(labels)
         dev_size = int(labels.shape[0] * 0.1)
-        test_size = int(labels.shape[0] * 0.1)
+        test_size = int(labels.shape[0] * 0.8)
 
         perm = np.random.permutation(labels.shape[0])
         start = end = 0
