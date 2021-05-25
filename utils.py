@@ -58,10 +58,10 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", "-r", type=str, default="data",
                         help="Path to data directory, where all the datasets will be placed. Default is 'data'")
-    parser.add_argument("--name", "-n", type=str, default="cora",
+    parser.add_argument("--name", "-n",type=str, default="cora",
                         help="Name of the dataset. Supported names are: cora, citeseer, pubmed, photo, computers, cs, and physics")
     parser.add_argument("--layers", "-l", nargs="+", default=[
-                        512, 256], help="The number of units of each layer of the GNN. Default is [512, 128]")
+                        256, 128], help="The number of units of each layer of the GNN. Default is [512, 128]")
     parser.add_argument("--pred_hid", '-ph', type=int,
                         default=512, help="The number of hidden units of layer of the predictor. Default is 512")
     parser.add_argument("--init-parts", "-ip", type=int, default=1,
@@ -69,7 +69,7 @@ def parse_args():
     parser.add_argument("--final-parts", "-fp", type=int, default=1,
                         help="The number of final partitions. Default is 1. Applicable for ClusterSelfGNN")
     parser.add_argument("--aug_params", "-p", nargs="+", default=[
-                        0.3, 0.4, 0.3, 0.2], help="Hyperparameters for augmentation (p_f1, p_f2, p_e1, p_e2). Default is [0.2, 0.1, 0.2, 0.3]")
+                        0.1, 0.4, 0.4, 0.1], help="Hyperparameters for augmentation (p_f1, p_f2, p_e1, p_e2). Default is [0.2, 0.1, 0.2, 0.3]")
     parser.add_argument("--lr", '-lr', type=float, default=0.0001,
                         help="Learning rate. Default is 0.0001.")
     parser.add_argument("--dropout", "-do", type=float,
@@ -77,7 +77,7 @@ def parse_args():
     parser.add_argument("--cache-step", '-cs', type=int, default=10,
                         help="The step size to cache the model, that is, every cache_step the model is persisted. Default is 100.")
     parser.add_argument("--epochs", '-e', type=int,
-                        default=1000, help="The number of epochs")
+                        default=10000, help="The number of epochs")
     parser.add_argument("--device", '-d', type=int,
                         default=2, help="GPU to use")
     return parser.parse_args()

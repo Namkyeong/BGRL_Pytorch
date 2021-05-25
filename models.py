@@ -73,11 +73,12 @@ class Encoder(nn.Module):
         rep_dim = layer_config[-1]
         self.dropout = dropout
         self.project = project
+        self.prelu = nn.PReLU()
         self.stacked_gnn = nn.ModuleList([GCNConv(layer_config[i-1], layer_config[i]) for i in range(1, len(layer_config))])
 
     def forward(self, x, edge_index, edge_weight=None):
         for gnn in self.stacked_gnn:
-            x = gnn(x, edge_index, edge_weight=edge_weight)
+            x = self.prelu(gnn(x, edge_index, edge_weight=edge_weight))
             x = F.dropout(x, p=self.dropout, training=self.training)
         return x
 
@@ -90,8 +91,7 @@ class BGRL(nn.Module):
         self.teacher_encoder = None
         self.teacher_ema_updater = EMA(moving_average_decay, epochs)
         rep_dim = layer_config[-1]
-        self.student_predictor = nn.Sequential(nn.Linear(rep_dim, pred_hid), nn.PReLU(), nn.Dropout(dropout),
-                                            nn.Linear(pred_hid, rep_dim), nn.BatchNorm1d(rep_dim), nn.PReLU(), nn.Dropout(dropout))
+        self.student_predictor = nn.Sequential(nn.BatchNorm1d(rep_dim), nn.Linear(rep_dim, pred_hid), nn.PReLU(), nn.BatchNorm1d(pred_hid), nn.Linear(pred_hid, rep_dim))
 
     @singleton('teacher_encoder')
     def _get_teacher_encoder(self):

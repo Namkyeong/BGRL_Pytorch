@@ -90,6 +90,7 @@ class ModelTrainer:
                 edge_weight_v1=batch_data.edge_attr1,
                 edge_weight_v2=batch_data.edge_attr2)
             emb = torch.cat([v1_output, v2_output], dim=1).detach()
+            #emb = v1_output.detach()
             y = batch_data.y.detach()
             trm = batch_data.train_mask.detach()
             dem = batch_data.dev_mask.detach()
@@ -111,7 +112,7 @@ class ModelTrainer:
         print()
         print("Evaluating ...")
         emb_dim, num_class = self._embeddings.shape[1], self._labels.unique().shape[0]
-        
+
         dev_accs, test_accs = [], []
         
         for i in range(50):
