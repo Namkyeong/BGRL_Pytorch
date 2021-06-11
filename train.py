@@ -1,9 +1,14 @@
 from torch_geometric.data import DataLoader
 
+
 import numpy as np
 
 import torch
+from torch.optim.lr_scheduler import StepLR, ExponentialLR
+from torch import optim
 from tensorboardX import SummaryWriter
+
+from warmup_scheduler import GradualWarmupScheduler
 
 torch.manual_seed(0)
 
@@ -21,7 +26,7 @@ class ModelTrainer:
     def __init__(self, args):
         self._args = args
         self._init()
-        self.writer = SummaryWriter(log_dir="runs/BGRL_dataset({}) ".format(args.name))
+        self.writer = SummaryWriter(log_dir="runs/BGRL_dataset({})_layers_({}) ".format(args.name, args.layers))
 
     def _init(self):
         args = self._args
@@ -37,8 +42,12 @@ class ModelTrainer:
         layers = [self._dataset.data.x1.shape[1]] + hidden_layers
         self._model = models.BGRL(layer_config=layers, pred_hid=args.pred_hid, dropout=args.dropout, epochs=args.epochs).to(self._device)
         print(self._model)
-        self._optimizer = torch.optim.Adam(
-            params=self._model.parameters(), lr=args.lr, weight_decay= 1e-5)
+
+        self._optimizer = optim.AdamW(params=self._model.parameters(), lr=args.lr, weight_decay= 1e-5)
+        # learning rate
+        scheduler = lambda epoch: epoch / 1000 if epoch < 1000 \
+                    else ( 1 + np.cos((epoch-1000) * np.pi / (self._args.epochs - 1000))) * 0.5
+        self._scheduler = optim.lr_scheduler.LambdaLR(self._optimizer, lr_lambda = scheduler)
 
     def train(self):
         # get initial test results
@@ -47,6 +56,10 @@ class ModelTrainer:
         self.writer.add_scalar("accs/val_acc", dev_acc, 0)
         self.writer.add_scalar("accs/test_acc", test_acc, 0)
 
+        best_test_acc = 0
+        best_dev_acc = 0
+        best_epoch = 0
+        
         # start training
         self._model.train()
         for epoch in range(self._args.epochs):
@@ -55,12 +68,14 @@ class ModelTrainer:
                 v1_output, v2_output, loss = self._model(
                     x1=batch_data.x1, x2=batch_data.x2, edge_index_v1=batch_data.edge_index1, edge_index_v2=batch_data.edge_index2,
                     edge_weight_v1=batch_data.edge_attr1, edge_weight_v2=batch_data.edge_attr2)
+                
                 self._optimizer.zero_grad()
                 loss.backward()
                 self._optimizer.step()
+                self._scheduler.step()
                 self._model.update_moving_average()
-                sys.stdout.write('\rEpoch {}/{}, batch {}/{}, loss {:.4f}'.format(epoch + 1, self._args.epochs, bc + 1,
-                                                                                  self._dataset.final_parts, loss.data))
+                sys.stdout.write('\rEpoch {}/{}, batch {}/{}, loss {:.4f}, lr {}'.format(epoch + 1, self._args.epochs, bc + 1,
+                                                                                  self._dataset.final_parts, loss.data, self._optimizer.param_groups[0]['lr']))
                 sys.stdout.flush()
             self.writer.add_scalar("loss/training_loss", loss, epoch)
             if (epoch + 1) % self._args.cache_step == 0:
@@ -69,10 +84,19 @@ class ModelTrainer:
                 torch.save(self._model.state_dict(), path)
                 self.infer_embeddings()
                 dev_acc, test_acc = self.evaluate()
-                
+
+                if dev_acc > best_dev_acc :
+                    best_dev_acc = dev_acc
+                    best_test_acc = test_acc
+                    best_epoch = epoch + 1
+
+                self.writer.add_scalar("stats/learning_rate", self._optimizer.param_groups[0]["lr"] , epoch + 1)
                 self.writer.add_scalar("accs/val_acc", dev_acc, epoch + 1)
                 self.writer.add_scalar("accs/test_acc", test_acc, epoch + 1)
         
+        f = open("BGRL_dataset({}).txt".format(self._args.name), "a")
+        f.write("best valid acc : {} best test acc : {} best epoch : {} \n".format(best_dev_acc, best_test_acc, best_epoch))
+
         print()
         print("Training Done!")
         
@@ -84,12 +108,12 @@ class ModelTrainer:
         for bc, batch_data in enumerate(self._loader):
             batch_data.to(self._device)
             v1_output, v2_output, _ = self._model(
-                x1=batch_data.x1, x2=batch_data.x2,
-                edge_index_v1=batch_data.edge_index1,
+                x1=batch_data.test_x, x2=batch_data.x2,
+                edge_index_v1=batch_data.test_edge_index,
                 edge_index_v2=batch_data.edge_index2,
-                edge_weight_v1=batch_data.edge_attr1,
+                edge_weight_v1=batch_data.test_edge_attr,
                 edge_weight_v2=batch_data.edge_attr2)
-            emb = torch.cat([v1_output, v2_output], dim=1).detach()
+            emb = v1_output.detach()
             #emb = v1_output.detach()
             y = batch_data.y.detach()
             trm = batch_data.train_mask.detach()
@@ -117,7 +141,7 @@ class ModelTrainer:
         
         for i in range(50):
             classifier = models.LogisticRegression(emb_dim, num_class).to(self._device)
-            optimizer = torch.optim.Adam(classifier.parameters(), lr=0.01, weight_decay=0.0)
+            optimizer = torch.optim.Adam(classifier.parameters(), lr=0.01, weight_decay=1e-5)
 
             for _ in range(100):
                 classifier.train()

@@ -135,10 +135,12 @@ class Dataset(InMemoryDataset):
                 view2data.x = F.normalize(view2data.x)
             print(view1data)
             print(view2data)
-            new_data = Data(y=y, x1=view1data.x, x2=view2data.x, edge_index1=view1data.edge_index,
-                            edge_index2=view2data.edge_index,
-                            edge_attr1=view1data.edge_attr, edge_attr2=view2data.edge_attr, train_mask=train_mask,
-                            dev_mask=dev_mask, test_mask=test_mask, num_nodes=cls_nodes.shape[0], nodes=cls_nodes)
+            new_data = Data(y=y, x1=view1data.x, x2=view2data.x, 
+                            edge_index1=view1data.edge_index, edge_index2=view2data.edge_index,
+                            edge_attr1=view1data.edge_attr, edge_attr2=view2data.edge_attr, 
+                            test_x = x, test_edge_index = edge_index, test_edge_attr = edge_attr,
+                            train_mask=train_mask, dev_mask=dev_mask, test_mask=test_mask, 
+                            num_nodes=cls_nodes.shape[0], nodes=cls_nodes)
             data_list.append(new_data)
         print()
         return data_list
@@ -167,10 +169,11 @@ class Dataset(InMemoryDataset):
         print(view2data)
         nodes = torch.tensor(np.arange(view1data.num_nodes), dtype=torch.long)
         data = Data(nodes=nodes, edge_index1=view1data.edge_index, edge_index2=view2data.edge_index,
-                    edge_attr1=view1data.edge_attr,
-                    edge_attr2=view2data.edge_attr, x1=view1data.x, x2=view2data.x, y=view1data.y,
-                    train_mask=view1data.train_mask,
-                    dev_mask=view1data.val_mask, test_mask=view1data.test_mask, num_nodes=view1data.num_nodes)
+                    edge_attr1=view1data.edge_attr, edge_attr2=view2data.edge_attr, 
+                    x1=view1data.x, x2=view2data.x, y=view1data.y,
+                    test_x = data.x, test_edge_index = data.edge_index, test_edge_attr = data.edge_attr,
+                    train_mask=view1data.train_mask, dev_mask=view1data.val_mask, test_mask=view1data.test_mask, 
+                    num_nodes=view1data.num_nodes)
         return [data]
 
     def download(self):
