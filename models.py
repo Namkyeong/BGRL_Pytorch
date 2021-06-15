@@ -49,19 +49,39 @@ def set_requires_grad(model, val):
         p.requires_grad = val
 
 
+# class Encoder(nn.Module):
+
+#     def __init__(self, layer_config, dropout=None, project=False, **kwargs):
+#         super().__init__()
+#         rep_dim = layer_config[-1]
+#         self.dropout = dropout
+#         self.prelu = nn.PReLU()
+#         self.stacked_gnn = nn.ModuleList([GCNConv(layer_config[i-1], layer_config[i]) for i in range(1, len(layer_config))])
+
+#     def forward(self, x, edge_index, edge_weight=None):
+#         for gnn in self.stacked_gnn:
+#             x = self.prelu(gnn(x, edge_index, edge_weight=edge_weight))
+#             x = F.dropout(x, p=self.dropout, training=self.training)
+#         return x
+
+
 class Encoder(nn.Module):
 
     def __init__(self, layer_config, dropout=None, project=False, **kwargs):
         super().__init__()
-        rep_dim = layer_config[-1]
-        self.dropout = dropout
-        self.prelu = nn.PReLU()
-        self.stacked_gnn = nn.ModuleList([GCNConv(layer_config[i-1], layer_config[i]) for i in range(1, len(layer_config))])
+        
+        self.conv1 = GCNConv(layer_config[0], layer_config[1])
+        self.bn1 = nn.BatchNorm1d(layer_config[1])
+        self.prelu1 = nn.PReLU()
+        self.conv2 = GCNConv(layer_config[1],layer_config[2])
+
 
     def forward(self, x, edge_index, edge_weight=None):
-        for gnn in self.stacked_gnn:
-            x = self.prelu(gnn(x, edge_index, edge_weight=edge_weight))
-            x = F.dropout(x, p=self.dropout, training=self.training)
+        
+        x = self.conv1(x, edge_index, edge_weight=edge_weight)
+        x = self.prelu1(self.bn1(x))
+        x = self.conv2(x, edge_index, edge_weight=edge_weight)
+
         return x
 
 
@@ -80,7 +100,7 @@ class BGRL(nn.Module):
         set_requires_grad(self.teacher_encoder, False)
         self.teacher_ema_updater = EMA(moving_average_decay, epochs)
         rep_dim = layer_config[-1]
-        self.student_predictor = nn.Sequential(nn.Linear(rep_dim, pred_hid), nn.BatchNorm1d(pred_hid), nn.PReLU(), nn.Linear(pred_hid, rep_dim))
+        self.student_predictor = nn.Sequential(nn.BatchNorm1d(rep_dim), nn.PReLU(), nn.Linear(rep_dim, pred_hid), nn.BatchNorm1d(pred_hid), nn.PReLU(), nn.Linear(pred_hid, rep_dim))
         self.student_predictor.apply(init_weights)
     
     def reset_moving_average(self):

@@ -26,7 +26,7 @@ class ModelTrainer:
     def __init__(self, args):
         self._args = args
         self._init()
-        self.writer = SummaryWriter(log_dir="runs/BGRL_dataset({})_layers_({}) ".format(args.name, args.layers))
+        self.writer = SummaryWriter(log_dir="runs/BGRL_dataset({})_layers_({})_ver2 ".format(args.name, args.layers))
 
     def _init(self):
         args = self._args

@@ -80,7 +80,7 @@ def parse_args():
     parser.add_argument("--epochs", '-e', type=int,
                         default=10000, help="The number of epochs")
     parser.add_argument("--device", '-d', type=int,
-                        default=2, help="GPU to use")
+                        default=1, help="GPU to use")
     return parser.parse_args()
 
 
