@@ -51,10 +51,13 @@ class ModelTrainer:
 
     def train(self):
         # get initial test results
+        print("start training!")
+        print("Initial Evaluation...")
         self.infer_embeddings()
-        dev_bests, test_bests = self.evaluate()
-        self.writer.add_scalar("accs/val_acc", sum(dev_bests)/len(dev_bests), 0)
-        self.writer.add_scalar("accs/test_acc", sum(test_bests)/len(test_bests), 0)
+        dev_best, dev_std_best, test_best, test_std_best = self.evaluate()
+        self.writer.add_scalar("accs/val_acc", dev_best, 0)
+        self.writer.add_scalar("accs/test_acc", test_best, 0)
+        print("validation: {:.4f}, test: {:.4f}".format(dev_best, test_best))
         
         # start training
         self._model.train()
@@ -75,31 +78,34 @@ class ModelTrainer:
                 sys.stdout.flush()
             self.writer.add_scalar("loss/training_loss", loss, epoch)
             if (epoch + 1) % self._args.cache_step == 0:
+                print("")
+                print("\nEvaluating {}th epoch..".format(epoch + 1))
                 path = osp.join(self._dataset.model_dir,
                                 f"model.ep.{epoch + 1}.pt")
                 torch.save(self._model.state_dict(), path)
                 self.infer_embeddings()
-                dev_acc, test_acc = self.evaluate()
+                dev_acc, dev_std, test_acc, test_std = self.evaluate()
 
-                for i in range(len(dev_acc)):
-                    if dev_bests[i] < dev_acc[i]:
-                        dev_bests[i] = dev_acc[i]
-                        test_bests[i] = test_acc[i]
+                if dev_best < dev_acc:
+                    dev_best = dev_acc
+                    dev_std_best = dev_std
+                    test_best = test_acc
+                    test_std_best = test_std
 
                 self.writer.add_scalar("stats/learning_rate", self._optimizer.param_groups[0]["lr"] , epoch + 1)
-                self.writer.add_scalar("accs/val_acc", sum(dev_bests)/len(dev_bests), epoch + 1)
-                self.writer.add_scalar("accs/test_acc", sum(test_bests)/len(test_bests), epoch + 1)
+                self.writer.add_scalar("accs/val_acc", dev_acc, epoch + 1)
+                self.writer.add_scalar("accs/test_acc", test_acc, epoch + 1)
+                print("validation: {:.4f}, test: {:.4f} \n".format(dev_best, test_best))
         
         f = open("BGRL_dataset({}).txt".format(self._args.name), "a")
-        for i in range(len(dev_acc)):
-            f.write("best valid acc : {} best test acc : {} \n".format(dev_bests[i], test_bests[i]))
+        f.write("best valid acc : {} best valid std : {} best test acc : {} best test std : {} \n".format(dev_best, dev_std_best, test_best, test_std_best))
         f.close()
 
         print()
         print("Training Done!")
         
     def infer_embeddings(self):
-        outputs = []
+        
         self._model.train(False)
         self._embeddings = self._labels = None
         for bc, batch_data in enumerate(self._loader):
@@ -123,12 +129,9 @@ class ModelTrainer:
         """
         Used for producing the results of Experiment 3.2 in the BGRL paper. 
         """
-        print()
-        print("Evaluating ...")
         emb_dim, num_class = self._embeddings.shape[1], self._labels.unique().shape[0]
-        
-
-        dev_accs_split, test_accs_split = [], []
+    
+        dev_accs, test_accs = [], []
         
         for i in range(20):
 
@@ -157,10 +160,16 @@ class ModelTrainer:
             dev_acc = (torch.sum(dev_preds == self._labels[self._dev_mask]).float() / self._labels[self._dev_mask].shape[0]).detach().cpu().numpy()
             test_acc = (torch.sum(test_preds == self._labels[self._test_mask]).float() / self._labels[self._test_mask].shape[0]).detach().cpu().numpy()
         
-            dev_accs_split.append(dev_acc)
-            test_accs_split.append(test_acc)
+            dev_accs.append(dev_acc * 100)
+            test_accs.append(test_acc * 100)
+        
+        dev_accs = np.stack(dev_accs)
+        test_accs = np.stack(test_accs)
 
-        return dev_accs_split, test_accs_split
+        dev_acc, dev_std = dev_accs.mean(), dev_accs.std()
+        test_acc, test_std = test_accs.mean(), test_accs.std()
+
+        return dev_acc, dev_std, test_acc, test_std
 
 def train_eval(args):
     trainer = ModelTrainer(args)

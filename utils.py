@@ -77,7 +77,7 @@ def parse_args():
     parser.add_argument("--cache-step", '-cs', type=int, default=10,
                         help="The step size to cache the model, that is, every cache_step the model is persisted. Default is 100.")
     parser.add_argument("--epochs", '-e', type=int,
-                        default=10000, help="The number of epochs")
+                        default=20, help="The number of epochs")
     parser.add_argument("--device", '-d', type=int,
                         default=0, help="GPU to use")
     return parser.parse_args()
