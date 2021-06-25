@@ -1,4 +1,4 @@
-from torch_geometric.datasets import Planetoid, Coauthor, Amazon
+from torch_geometric.datasets import Planetoid, Coauthor, Amazon, WikiCS
 from torch_geometric.utils import dropout_adj
 
 from collections import Counter
@@ -11,7 +11,6 @@ import argparse
 
 import scipy.sparse as sp
 import numpy as np
-np.random.seed(0)
 
 import torch
 
@@ -80,7 +79,7 @@ def parse_args():
     parser.add_argument("--epochs", '-e', type=int,
                         default=10000, help="The number of epochs")
     parser.add_argument("--device", '-d', type=int,
-                        default=1, help="GPU to use")
+                        default=0, help="GPU to use")
     return parser.parse_args()
 
 
@@ -115,7 +114,12 @@ def decide_config(root, name):
         name = "Physics"
         root = osp.join(root, "pyg")
         params = {"kwargs": {"root": root, "name": name},
-                  "name": name, "class": Coauthor, "src": "pyg"}        
+                  "name": name, "class": Coauthor, "src": "pyg"}
+    elif name == "wikics":
+        name = "WikiCS"
+        root = osp.join(root, "pyg")
+        params = {"kwargs": {"root": root},
+                  "name": name, "class": WikiCS, "src": "pyg"}        
     else:
         raise Exception(
             f"Unknown dataset name {name}, name has to be one of the following 'cora', 'citeseer', 'pubmed', 'photo', 'computers', 'cs', 'physics'")
@@ -142,37 +146,37 @@ def create_masks(data):
 
     """
     if not hasattr(data, "val_mask"):
-        labels = data.y.numpy()
-        counter = Counter(labels)
-        dev_size = int(labels.shape[0] * 0.1)
-        test_size = int(labels.shape[0] * 0.8)
 
-        perm = np.random.permutation(labels.shape[0])
-        start = end = 0
-        test_labels = []
-        dev_labels = []
-        for l, c in counter.items():
-            frac = c / labels.shape[0]
-            ts = int(frac * test_size)
-            ds = int(frac * dev_size)
-            end += ts
-            t_lbl = perm[start:end]
-            test_labels.append(t_lbl)
-            start = end
-            end += ds
-            d_lbl = perm[start:end]
-            dev_labels.append(d_lbl)
-            start = end
+        data.train_mask = data.dev_mask = data.test_mask = None
+        
+        for i in range(20):
+            labels = data.y.numpy()
+            dev_size = int(labels.shape[0] * 0.1)
+            test_size = int(labels.shape[0] * 0.8)
 
-        test_index, dev_index = np.concatenate(
-            test_labels), np.concatenate(dev_labels)
-        data_index = np.arange(labels.shape[0])
-        test_mask = torch.tensor(
-            np.in1d(data_index, test_index), dtype=torch.bool)
-        dev_mask = torch.tensor(
-            np.in1d(data_index, dev_index), dtype=torch.bool)
-        train_mask = ~(dev_mask + test_mask)
-        data.train_mask = train_mask
-        data.val_mask = dev_mask
-        data.test_mask = test_mask
+            perm = np.random.permutation(labels.shape[0])
+            test_index = perm[:test_size]
+            dev_index = perm[test_size:test_size+dev_size]
+            
+            data_index = np.arange(labels.shape[0])
+            test_mask = torch.tensor(np.in1d(data_index, test_index), dtype=torch.bool)
+            dev_mask = torch.tensor(np.in1d(data_index, dev_index), dtype=torch.bool)
+            train_mask = ~(dev_mask + test_mask)
+            test_mask = test_mask.reshape(1, -1)
+            dev_mask = dev_mask.reshape(1, -1)
+            train_mask = train_mask.reshape(1, -1)
+            
+            if data.train_mask is None :
+                data.train_mask = train_mask
+                data.val_mask = dev_mask
+                data.test_mask = test_mask
+            else :
+                data.train_mask = torch.cat((data.train_mask, train_mask), dim = 0)
+                data.val_mask = torch.cat((data.val_mask, dev_mask), dim = 0)
+                data.test_mask = torch.cat((data.test_mask, test_mask), dim = 0)
+    
+    else :
+        data.train_mask = data.train_mask.T
+        data.val_mask = data.val_mask.T
+    
     return data

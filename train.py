@@ -26,7 +26,7 @@ class ModelTrainer:
     def __init__(self, args):
         self._args = args
         self._init()
-        self.writer = SummaryWriter(log_dir="runs/BGRL_dataset({})_layers_({})_ver2 ".format(args.name, args.layers))
+        self.writer = SummaryWriter(log_dir="runs/BGRL_dataset({})_layers_({})".format(args.name, args.layers))
 
     def _init(self):
         args = self._args
@@ -52,13 +52,9 @@ class ModelTrainer:
     def train(self):
         # get initial test results
         self.infer_embeddings()
-        dev_acc, test_acc = self.evaluate()
-        self.writer.add_scalar("accs/val_acc", dev_acc, 0)
-        self.writer.add_scalar("accs/test_acc", test_acc, 0)
-
-        best_test_acc = 0
-        best_dev_acc = 0
-        best_epoch = 0
+        dev_bests, test_bests = self.evaluate()
+        self.writer.add_scalar("accs/val_acc", sum(dev_bests)/len(dev_bests), 0)
+        self.writer.add_scalar("accs/test_acc", sum(test_bests)/len(test_bests), 0)
         
         # start training
         self._model.train()
@@ -85,17 +81,19 @@ class ModelTrainer:
                 self.infer_embeddings()
                 dev_acc, test_acc = self.evaluate()
 
-                if dev_acc > best_dev_acc :
-                    best_dev_acc = dev_acc
-                    best_test_acc = test_acc
-                    best_epoch = epoch + 1
+                for i in range(len(dev_acc)):
+                    if dev_bests[i] < dev_acc[i]:
+                        dev_bests[i] = dev_acc[i]
+                        test_bests[i] = test_acc[i]
 
                 self.writer.add_scalar("stats/learning_rate", self._optimizer.param_groups[0]["lr"] , epoch + 1)
-                self.writer.add_scalar("accs/val_acc", dev_acc, epoch + 1)
-                self.writer.add_scalar("accs/test_acc", test_acc, epoch + 1)
+                self.writer.add_scalar("accs/val_acc", sum(dev_bests)/len(dev_bests), epoch + 1)
+                self.writer.add_scalar("accs/test_acc", sum(test_bests)/len(test_bests), epoch + 1)
         
         f = open("BGRL_dataset({}).txt".format(self._args.name), "a")
-        f.write("best valid acc : {} best test acc : {} best epoch : {} \n".format(best_dev_acc, best_test_acc, best_epoch))
+        for i in range(len(dev_acc)):
+            f.write("best valid acc : {} best test acc : {} \n".format(dev_bests[i], test_bests[i]))
+        f.close()
 
         print()
         print("Training Done!")
@@ -104,7 +102,6 @@ class ModelTrainer:
         outputs = []
         self._model.train(False)
         self._embeddings = self._labels = None
-        self._train_mask = self._dev_mask = self._test_mask = None
         for bc, batch_data in enumerate(self._loader):
             batch_data.to(self._device)
             v1_output, v2_output, _ = self._model(
@@ -114,20 +111,13 @@ class ModelTrainer:
                 edge_weight_v1=batch_data.test_edge_attr,
                 edge_weight_v2=batch_data.edge_attr2)
             emb = v1_output.detach()
-            #emb = v1_output.detach()
             y = batch_data.y.detach()
-            trm = batch_data.train_mask.detach()
-            dem = batch_data.dev_mask.detach()
-            tem = batch_data.test_mask.detach()
             if self._embeddings is None:
                 self._embeddings, self._labels = emb, y
-                self._train_mask, self._dev_mask, self._test_mask = trm, dem, tem
             else:
                 self._embeddings = torch.cat([self._embeddings, emb])
                 self._labels = torch.cat([self._labels, y])
-                self._train_mask = torch.cat([self._train_mask, trm])
-                self._dev_mask = torch.cat([self._dev_mask, dem])
-                self._test_mask = torch.cat([self._test_mask, tem])
+                
     
     def evaluate(self):
         """
@@ -136,12 +126,21 @@ class ModelTrainer:
         print()
         print("Evaluating ...")
         emb_dim, num_class = self._embeddings.shape[1], self._labels.unique().shape[0]
-
-        dev_accs, test_accs = [], []
         
-        for i in range(50):
+
+        dev_accs_split, test_accs_split = [], []
+        
+        for i in range(20):
+
+            self._train_mask = self._dataset[0].train_mask[i]
+            self._dev_mask = self._dataset[0].val_mask[i]
+            if self._args.name == "WikiCS":
+                self._test_mask = self._dataset[0].test_mask
+            else :
+                self._test_mask = self._dataset[0].test_mask[i]
+
             classifier = models.LogisticRegression(emb_dim, num_class).to(self._device)
-            optimizer = torch.optim.Adam(classifier.parameters(), lr=0.01, weight_decay=1e-5)
+            optimizer = torch.optim.AdamW(classifier.parameters(), lr=0.01, weight_decay=1e-5)
 
             for _ in range(100):
                 classifier.train()
@@ -157,16 +156,11 @@ class ModelTrainer:
             
             dev_acc = (torch.sum(dev_preds == self._labels[self._dev_mask]).float() / self._labels[self._dev_mask].shape[0]).detach().cpu().numpy()
             test_acc = (torch.sum(test_preds == self._labels[self._test_mask]).float() / self._labels[self._test_mask].shape[0]).detach().cpu().numpy()
-            dev_accs.append(dev_acc * 100)
-            test_accs.append(test_acc * 100)
-
-        dev_accs = np.stack(dev_accs)
-        test_accs = np.stack(test_accs)
         
-        print('Average validation accuracy: {:.2f} with std: {}'.format(dev_accs.mean(), dev_accs.std()))
-        print('Average test accuracy: {:.2f} with std: {:.2f}'.format(test_accs.mean(), test_accs.std()))
+            dev_accs_split.append(dev_acc)
+            test_accs_split.append(test_acc)
 
-        return dev_accs.mean(), test_accs.mean()
+        return dev_accs_split, test_accs_split
 
 def train_eval(args):
     trainer = ModelTrainer(args)
