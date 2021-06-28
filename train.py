@@ -1,5 +1,6 @@
 from torch_geometric.data import DataLoader
 
+import torch_geometric.utils
 
 import numpy as np
 
@@ -19,6 +20,9 @@ import data
 import os.path as osp
 import os
 import sys
+
+from utils import clustering_metrics
+from sklearn.cluster import KMeans
 
 
 class ModelTrainer:
@@ -54,11 +58,13 @@ class ModelTrainer:
         print("start training!")
         print("Initial Evaluation...")
         self.infer_embeddings()
-        dev_best, dev_std_best, test_best, test_std_best = self.evaluate()
-        self.writer.add_scalar("accs/val_acc", dev_best, 0)
-        self.writer.add_scalar("accs/test_acc", test_best, 0)
-        print("validation: {:.4f}, test: {:.4f}".format(dev_best, test_best))
-        
+        # dev_best, dev_std_best, test_best, test_std_best = self.evaluate()
+        # self.writer.add_scalar("accs/val_acc", dev_best, 0)
+        # self.writer.add_scalar("accs/test_acc", test_best, 0)
+        # print("validation: {:.4f}, test: {:.4f}".format(dev_best, test_best))
+        acc_best, nmi_best, ari_best = self.evaluate_clustering()
+
+
         # start training
         self._model.train()
         for epoch in range(self._args.epochs):
@@ -84,21 +90,35 @@ class ModelTrainer:
                                 f"model.ep.{epoch + 1}.pt")
                 torch.save(self._model.state_dict(), path)
                 self.infer_embeddings()
-                dev_acc, dev_std, test_acc, test_std = self.evaluate()
+                # dev_acc, dev_std, test_acc, test_std = self.evaluate()
+                acc, nmi, ari = self.evaluate_clustering()
 
-                if dev_best < dev_acc:
-                    dev_best = dev_acc
-                    dev_std_best = dev_std
-                    test_best = test_acc
-                    test_std_best = test_std
+                # if dev_best < dev_acc:
+                #     dev_best = dev_acc
+                #     dev_std_best = dev_std
+                #     test_best = test_acc
+                #     test_std_best = test_std
 
-                self.writer.add_scalar("stats/learning_rate", self._optimizer.param_groups[0]["lr"] , epoch + 1)
-                self.writer.add_scalar("accs/val_acc", dev_acc, epoch + 1)
-                self.writer.add_scalar("accs/test_acc", test_acc, epoch + 1)
-                print("validation: {:.4f}, test: {:.4f} \n".format(dev_best, test_best))
+                if acc_best < acc:
+                    acc_best = acc
+                if nmi_best < nmi:
+                    nmi_best = nmi
+                if ari_best < ari:
+                    ari_best = ari
+
+                # self.writer.add_scalar("stats/learning_rate", self._optimizer.param_groups[0]["lr"] , epoch + 1)
+                # self.writer.add_scalar("accs/val_acc", dev_acc, epoch + 1)
+                # self.writer.add_scalar("accs/test_acc", test_acc, epoch + 1)
+                # print("validation: {:.4f}, test: {:.4f} \n".format(dev_acc, test_acc))
+                
+                print("acc: {:.4f}, nmi: {:.4f}, ari: {:.4f}".format(acc, nmi, ari))
         
+        # f = open("BGRL_dataset({}).txt".format(self._args.name), "a")
+        # f.write("best valid acc : {} best valid std : {} best test acc : {} best test std : {} \n".format(dev_best, dev_std_best, test_best, test_std_best))
+        # f.close()
+
         f = open("BGRL_dataset({}).txt".format(self._args.name), "a")
-        f.write("best valid acc : {} best valid std : {} best test acc : {} best test std : {} \n".format(dev_best, dev_std_best, test_best, test_std_best))
+        f.write("best acc : {} best nmi : {} best ari : {} \n".format(acc_best, nmi_best, ari_best))
         f.close()
 
         print()
@@ -143,9 +163,9 @@ class ModelTrainer:
                 self._test_mask = self._dataset[0].test_mask[i]
 
             classifier = models.LogisticRegression(emb_dim, num_class).to(self._device)
-            optimizer = torch.optim.AdamW(classifier.parameters(), lr=0.01, weight_decay=1e-5)
+            optimizer = torch.optim.Adam(classifier.parameters(), lr=0.01, weight_decay=0.0)
 
-            for _ in range(100):
+            for epoch in range(100):
                 classifier.train()
                 logits, loss = classifier(self._embeddings[self._train_mask], self._labels[self._train_mask])
                 optimizer.zero_grad()
@@ -156,13 +176,13 @@ class ModelTrainer:
             test_logits, _ = classifier(self._embeddings[self._test_mask], self._labels[self._test_mask])
             dev_preds = torch.argmax(dev_logits, dim=1)
             test_preds = torch.argmax(test_logits, dim=1)
-            
+                    
             dev_acc = (torch.sum(dev_preds == self._labels[self._dev_mask]).float() / self._labels[self._dev_mask].shape[0]).detach().cpu().numpy()
             test_acc = (torch.sum(test_preds == self._labels[self._test_mask]).float() / self._labels[self._test_mask].shape[0]).detach().cpu().numpy()
-        
+
             dev_accs.append(dev_acc * 100)
             test_accs.append(test_acc * 100)
-        
+                
         dev_accs = np.stack(dev_accs)
         test_accs = np.stack(test_accs)
 
@@ -170,6 +190,36 @@ class ModelTrainer:
         test_acc, test_std = test_accs.mean(), test_accs.std()
 
         return dev_acc, dev_std, test_acc, test_std
+
+    
+    def evaluate_clustering(self):
+
+        embeddings = self._embeddings.detach().cpu().numpy()
+        true_y = self._dataset[0].y.detach().cpu().numpy()
+
+        accs, nmis, aris = [], [], []
+
+        for i in range(10):
+
+            kmeans = KMeans(n_clusters = len(self._dataset[0].y.unique())).fit(embeddings)
+            pred_y = kmeans.labels_
+            cm = clustering_metrics(true_y, pred_y)
+            acc, nmi, ari = cm.evaluationClusterModelFromLabel()
+
+        accs.append(acc)
+        nmis.append(nmi)
+        aris.append(ari)
+
+        accs = np.stack(accs)
+        nmis = np.stack(nmis)
+        aris = np.stack(aris)
+
+        acc = accs.mean()
+        nmi = nmis.mean()
+        ari = aris.mean()
+
+        return acc, nmi, ari
+
 
 def train_eval(args):
     trainer = ModelTrainer(args)
