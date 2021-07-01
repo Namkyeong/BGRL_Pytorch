@@ -82,7 +82,6 @@ class BGRL(nn.Module):
         self.teacher_ema_updater = EMA(moving_average_decay, epochs)
         rep_dim = layer_config[-1]
         self.student_predictor = nn.Sequential(nn.Linear(rep_dim, pred_hid), nn.BatchNorm1d(pred_hid, momentum = 0.01), nn.PReLU(), nn.Linear(pred_hid, rep_dim))
-        #self.student_predictor = nn.Sequential(nn.BatchNorm1d(rep_dim, momentum = 0.01), nn.PReLU(), nn.Linear(rep_dim, pred_hid), nn.BatchNorm1d(pred_hid, momentum = 0.01), nn.PReLU(), nn.Linear(pred_hid, rep_dim))
         self.student_predictor.apply(init_weights)
     
     def reset_moving_average(self):
@@ -111,18 +110,6 @@ class BGRL(nn.Module):
         return v1_student, v2_student, loss.mean()
 
 
-# class TorchStandardScaler:
-
-#     def fit(self, x):
-#         self.mean = x.mean(0, keepdim=True)
-#         self.std = x.std(0, unbiased=False, keepdim=True)
-    
-#     def transform(self, x):
-#         x -= self.mean
-#         x /= (self.std + 1e-7)
-#         return x
-
-
 class LogisticRegression(nn.Module):
     def __init__(self, num_dim, num_class):
         super().__init__()
@@ -133,10 +120,7 @@ class LogisticRegression(nn.Module):
 
     def forward(self, x, y):
 
-        # scaler = TorchStandardScaler()
-        # scaler.fit(x)
-        # x_scaled = scaler.transform(x)
-        # logits = self.linear(x_scaled)
         logits = self.linear(x)
         loss = self.cross_entropy(logits, y)
+
         return logits, loss
