@@ -19,6 +19,9 @@ from sklearn import metrics
 from munkres import Munkres, print_matrix
 
 
+"""
+The Following code is borrowed from SelfGNN
+"""
 class Augmentation:
 
     def __init__(self, p_f1 = 0.2, p_f2 = 0.1, p_e1 = 0.2, p_e2 = 0.3):
@@ -33,14 +36,15 @@ class Augmentation:
         self.p_e2 = p_e2
         self.method = "BGRL"
     
-    def _feature_masking(self, data):
+    def _feature_masking(self, data, device):
         feat_mask1 = torch.FloatTensor(data.x.shape[1]).uniform_() > self.p_f1
         feat_mask2 = torch.FloatTensor(data.x.shape[1]).uniform_() > self.p_f2
+        feat_mask1, feat_mask2 = feat_mask1.to(device), feat_mask2.to(device)
         x1, x2 = data.x.clone(), data.x.clone()
         x1, x2 = x1 * feat_mask1, x2 * feat_mask2
 
-        edge_index1, edge_attr1 = dropout_adj(data.edge_index, data.edge_attr, p = self.p_e1, force_undirected=True)
-        edge_index2, edge_attr2 = dropout_adj(data.edge_index, data.edge_attr, p = self.p_e2, force_undirected=True)
+        edge_index1, edge_attr1 = dropout_adj(data.edge_index, data.edge_attr, p = self.p_e1)
+        edge_index2, edge_attr2 = dropout_adj(data.edge_index, data.edge_attr, p = self.p_e2)
 
         new_data1, new_data2 = data.clone(), data.clone()
         new_data1.x, new_data2.x = x1, x2
@@ -53,10 +57,6 @@ class Augmentation:
         
         return self._feature_masking(data)
 
-
-"""
-The Following code is borrowed from SelfGNN
-"""
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -84,6 +84,8 @@ def parse_args():
                         default=20, help="The number of epochs")
     parser.add_argument("--device", '-d', type=int,
                         default=0, help="GPU to use")
+    parser.add_argument("--task",type=str, default="node",
+                        help="downstream task. supported tasks : node classification, clustering")
     return parser.parse_args()
 
 

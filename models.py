@@ -57,7 +57,6 @@ class Encoder(nn.Module):
         self.prelu1 = nn.PReLU()
         self.conv2 = GCNConv(layer_config[1],layer_config[2])
 
-
     def forward(self, x, edge_index, edge_weight=None):
         
         x = self.conv1(x, edge_index, edge_weight=edge_weight)

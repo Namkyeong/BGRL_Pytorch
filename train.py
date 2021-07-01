@@ -1,5 +1,6 @@
 from torch_geometric.data import DataLoader
 
+from torch_geometric.utils import dropout_adj
 import torch_geometric.utils
 
 import numpy as np
@@ -36,14 +37,10 @@ class ModelTrainer:
         args = self._args
         os.environ["CUDA_VISIBLE_DEVICES"] = str(args.device)
         self._device = f'cuda:{args.device}' if torch.cuda.is_available() else "cpu"
-        self._aug = utils.Augmentation(float(args.aug_params[0]),float(args.aug_params[1]),float(args.aug_params[2]),float(args.aug_params[3]))
-        self._dataset = data.Dataset(root=args.root, name=args.name, num_parts=args.init_parts,
-                                     final_parts=args.final_parts, augumentation=self._aug)
-        self._loader = DataLoader(
-            dataset=self._dataset)  # [self._dataset.data]
-        print(f"Data: {self._dataset.data}")
+        self._dataset = data.Dataset(root=args.root, name=args.name)[0]
+        print(f"Data: {self._dataset}")
         hidden_layers = [int(l) for l in args.layers]
-        layers = [self._dataset.data.x1.shape[1]] + hidden_layers
+        layers = [self._dataset.x.shape[1]] + hidden_layers
         self._model = models.BGRL(layer_config=layers, pred_hid=args.pred_hid, dropout=args.dropout, epochs=args.epochs).to(self._device)
         print(self._model)
 
@@ -53,51 +50,39 @@ class ModelTrainer:
                     else ( 1 + np.cos((epoch-1000) * np.pi / (self._args.epochs - 1000))) * 0.5
         self._scheduler = optim.lr_scheduler.LambdaLR(self._optimizer, lr_lambda = scheduler)
 
-    def train(self):
+    def train_clustering(self):
         # get initial test results
         print("start training!")
         print("Initial Evaluation...")
         self.infer_embeddings()
-        # dev_best, dev_std_best, test_best, test_std_best = self.evaluate()
-        # self.writer.add_scalar("accs/val_acc", dev_best, 0)
-        # self.writer.add_scalar("accs/test_acc", test_best, 0)
-        # print("validation: {:.4f}, test: {:.4f}".format(dev_best, test_best))
         acc_best, nmi_best, ari_best = self.evaluate_clustering()
-
 
         # start training
         self._model.train()
         for epoch in range(self._args.epochs):
-            for bc, batch_data in enumerate(self._loader):
-                batch_data.to(self._device)
-                v1_output, v2_output, loss = self._model(
-                    x1=batch_data.x1, x2=batch_data.x2, edge_index_v1=batch_data.edge_index1, edge_index_v2=batch_data.edge_index2,
-                    edge_weight_v1=batch_data.edge_attr1, edge_weight_v2=batch_data.edge_attr2)
+            self._dataset.to(self._device)
+
+            augmentation = utils.Augmentation(float(self._args.aug_params[0]),float(self._args.aug_params[1]),float(self._args.aug_params[2]),float(self._args.aug_params[3]))
+            view1, view2 = augmentation._feature_masking(self._dataset, self._device)
+
+            v1_output, v2_output, loss = self._model(
+                x1=view1.x, x2=view2.x, edge_index_v1=view1.edge_index, edge_index_v2=view2.edge_index,
+                edge_weight_v1=view1.edge_attr, edge_weight_v2=view2.edge_attr)
                 
-                self._optimizer.zero_grad()
-                loss.backward()
-                self._optimizer.step()
-                self._scheduler.step()
-                self._model.update_moving_average()
-                sys.stdout.write('\rEpoch {}/{}, batch {}/{}, loss {:.4f}, lr {}'.format(epoch + 1, self._args.epochs, bc + 1,
-                                                                                  self._dataset.final_parts, loss.data, self._optimizer.param_groups[0]['lr']))
-                sys.stdout.flush()
-            self.writer.add_scalar("loss/training_loss", loss, epoch)
+            self._optimizer.zero_grad()
+            loss.backward()
+            self._optimizer.step()
+            self._scheduler.step()
+            self._model.update_moving_average()
+            sys.stdout.write('\rEpoch {}/{}, loss {:.4f}, lr {}'.format(epoch + 1, self._args.epochs, loss.data, self._optimizer.param_groups[0]['lr']))
+            sys.stdout.flush()
+            
             if (epoch + 1) % self._args.cache_step == 0:
                 print("")
                 print("\nEvaluating {}th epoch..".format(epoch + 1))
-                path = osp.join(self._dataset.model_dir,
-                                f"model.ep.{epoch + 1}.pt")
-                torch.save(self._model.state_dict(), path)
-                self.infer_embeddings()
-                # dev_acc, dev_std, test_acc, test_std = self.evaluate()
-                acc, nmi, ari = self.evaluate_clustering()
 
-                # if dev_best < dev_acc:
-                #     dev_best = dev_acc
-                #     dev_std_best = dev_std
-                #     test_best = test_acc
-                #     test_std_best = test_std
+                self.infer_embeddings()
+                acc, nmi, ari = self.evaluate_clustering()
 
                 if acc_best < acc:
                     acc_best = acc
@@ -105,20 +90,68 @@ class ModelTrainer:
                     nmi_best = nmi
                 if ari_best < ari:
                     ari_best = ari
-
-                # self.writer.add_scalar("stats/learning_rate", self._optimizer.param_groups[0]["lr"] , epoch + 1)
-                # self.writer.add_scalar("accs/val_acc", dev_acc, epoch + 1)
-                # self.writer.add_scalar("accs/test_acc", test_acc, epoch + 1)
-                # print("validation: {:.4f}, test: {:.4f} \n".format(dev_acc, test_acc))
                 
                 print("acc: {:.4f}, nmi: {:.4f}, ari: {:.4f}".format(acc, nmi, ari))
-        
-        # f = open("BGRL_dataset({}).txt".format(self._args.name), "a")
-        # f.write("best valid acc : {} best valid std : {} best test acc : {} best test std : {} \n".format(dev_best, dev_std_best, test_best, test_std_best))
-        # f.close()
 
-        f = open("BGRL_dataset({}).txt".format(self._args.name), "a")
+        f = open("BGRL_dataset({})_clustering.txt".format(self._args.name), "a")
         f.write("best acc : {} best nmi : {} best ari : {} \n".format(acc_best, nmi_best, ari_best))
+        f.close()
+
+        print()
+        print("Training Done!")
+
+    def train(self):
+        # get initial test results
+        print("start training!")
+        print("Initial Evaluation...")
+        self.infer_embeddings()
+        dev_best, dev_std_best, test_best, test_std_best = self.evaluate()
+        self.writer.add_scalar("accs/val_acc", dev_best, 0)
+        self.writer.add_scalar("accs/test_acc", test_best, 0)
+        print("validation: {:.4f}, test: {:.4f}".format(dev_best, test_best))
+
+        # start training
+        self._model.train()
+        for epoch in range(self._args.epochs):
+            
+            self._dataset.to(self._device)
+
+            augmentation = utils.Augmentation(float(self._args.aug_params[0]),float(self._args.aug_params[1]),float(self._args.aug_params[2]),float(self._args.aug_params[3]))
+            view1, view2 = augmentation._feature_masking(self._dataset, self._device)
+
+            v1_output, v2_output, loss = self._model(
+                x1=view1.x, x2=view2.x, edge_index_v1=view1.edge_index, edge_index_v2=view2.edge_index,
+                edge_weight_v1=view1.edge_attr, edge_weight_v2=view2.edge_attr)
+                
+            self._optimizer.zero_grad()
+            loss.backward()
+            self._optimizer.step()
+            self._scheduler.step()
+            self._model.update_moving_average()
+            sys.stdout.write('\rEpoch {}/{}, loss {:.4f}, lr {}'.format(epoch + 1, self._args.epochs, loss.data, self._optimizer.param_groups[0]['lr']))
+            sys.stdout.flush()
+            
+            if (epoch + 1) % self._args.cache_step == 0:
+                print("")
+                print("\nEvaluating {}th epoch..".format(epoch + 1))
+                
+                self.infer_embeddings()
+                dev_acc, dev_std, test_acc, test_std = self.evaluate()
+
+                if dev_best < dev_acc:
+                    dev_best = dev_acc
+                    dev_std_best = dev_std
+                    test_best = test_acc
+                    test_std_best = test_std
+
+                self.writer.add_scalar("stats/learning_rate", self._optimizer.param_groups[0]["lr"] , epoch + 1)
+                self.writer.add_scalar("accs/val_acc", dev_acc, epoch + 1)
+                self.writer.add_scalar("accs/test_acc", test_acc, epoch + 1)
+                print("validation: {:.4f}, test: {:.4f} \n".format(dev_acc, test_acc))
+                
+        
+        f = open("BGRL_dataset({})_node.txt".format(self._args.name), "a")
+        f.write("best valid acc : {} best valid std : {} best test acc : {} best test std : {} \n".format(dev_best, dev_std_best, test_best, test_std_best))
         f.close()
 
         print()
@@ -128,21 +161,21 @@ class ModelTrainer:
         
         self._model.train(False)
         self._embeddings = self._labels = None
-        for bc, batch_data in enumerate(self._loader):
-            batch_data.to(self._device)
-            v1_output, v2_output, _ = self._model(
-                x1=batch_data.test_x, x2=batch_data.x2,
-                edge_index_v1=batch_data.test_edge_index,
-                edge_index_v2=batch_data.edge_index2,
-                edge_weight_v1=batch_data.test_edge_attr,
-                edge_weight_v2=batch_data.edge_attr2)
-            emb = v1_output.detach()
-            y = batch_data.y.detach()
-            if self._embeddings is None:
-                self._embeddings, self._labels = emb, y
-            else:
-                self._embeddings = torch.cat([self._embeddings, emb])
-                self._labels = torch.cat([self._labels, y])
+
+        self._dataset.to(self._device)
+        v1_output, v2_output, _ = self._model(
+            x1=self._dataset.x, x2=self._dataset.x,
+            edge_index_v1=self._dataset.edge_index,
+            edge_index_v2=self._dataset.edge_index,
+            edge_weight_v1=self._dataset.edge_attr,
+            edge_weight_v2=self._dataset.edge_attr)
+        emb = v1_output.detach()
+        y = self._dataset.y.detach()
+        if self._embeddings is None:
+            self._embeddings, self._labels = emb, y
+        else:
+            self._embeddings = torch.cat([self._embeddings, emb])
+            self._labels = torch.cat([self._labels, y])
                 
     
     def evaluate(self):
@@ -155,12 +188,12 @@ class ModelTrainer:
         
         for i in range(20):
 
-            self._train_mask = self._dataset[0].train_mask[i]
-            self._dev_mask = self._dataset[0].val_mask[i]
+            self._train_mask = self._dataset.train_mask[i]
+            self._dev_mask = self._dataset.val_mask[i]
             if self._args.name == "WikiCS":
-                self._test_mask = self._dataset[0].test_mask
+                self._test_mask = self._dataset.test_mask
             else :
-                self._test_mask = self._dataset[0].test_mask[i]
+                self._test_mask = self._dataset.test_mask[i]
 
             classifier = models.LogisticRegression(emb_dim, num_class).to(self._device)
             optimizer = torch.optim.Adam(classifier.parameters(), lr=0.01, weight_decay=0.0)
@@ -195,35 +228,25 @@ class ModelTrainer:
     def evaluate_clustering(self):
 
         embeddings = self._embeddings.detach().cpu().numpy()
-        true_y = self._dataset[0].y.detach().cpu().numpy()
+        true_y = self._dataset.y.detach().cpu().numpy()
 
         accs, nmis, aris = [], [], []
 
-        for i in range(10):
-
-            kmeans = KMeans(n_clusters = len(self._dataset[0].y.unique())).fit(embeddings)
-            pred_y = kmeans.labels_
-            cm = clustering_metrics(true_y, pred_y)
-            acc, nmi, ari = cm.evaluationClusterModelFromLabel()
-
-        accs.append(acc)
-        nmis.append(nmi)
-        aris.append(ari)
-
-        accs = np.stack(accs)
-        nmis = np.stack(nmis)
-        aris = np.stack(aris)
-
-        acc = accs.mean()
-        nmi = nmis.mean()
-        ari = aris.mean()
+        kmeans = KMeans(n_clusters = len(self._dataset.y.unique())).fit(embeddings)
+        pred_y = kmeans.labels_
+        cm = clustering_metrics(true_y, pred_y)
+        acc, nmi, ari = cm.evaluationClusterModelFromLabel()
 
         return acc, nmi, ari
 
 
 def train_eval(args):
     trainer = ModelTrainer(args)
-    trainer.train()
+    if args.task == "clustering":
+        trainer.train_clustering()
+    else :
+        trainer.train()
+        
     trainer.writer.close()
 
 

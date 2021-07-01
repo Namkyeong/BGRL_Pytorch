@@ -71,9 +71,9 @@ class Dataset(InMemoryDataset):
     @property
     def processed_file_names(self):
         if self.num_parts == 1:
-            return [f'byg.data.aug.{self.augumentation.method}.pt']
+            return [f'byg.data.aug.pt']
         else:
-            return [f'byg.data.aug.{self.augumentation.method}.ip.{self.num_parts}.fp.{self.final_parts}.pt']
+            return [f'byg.data.aug.ip.{self.num_parts}.fp.{self.final_parts}.pt']
 
     @property
     def raw_dir(self):
@@ -104,25 +104,9 @@ class Dataset(InMemoryDataset):
         :return:
         """
         print("Processing full batch data")
-        view1data, view2data = self.augumentation(data)
-        diff = abs(view2data.x.shape[1] - view1data.x.shape[1])
-        if diff > 0:
-            """
-            Data augmentation on the features could lead to mismatch between the shape of the two views,
-            hence the smaller view should be padded with zero. (smaller_data is a reference, changes will
-            reflect on the original data)
-            """
-            smaller_data = view1data if view1data.x.shape[1] < view2data.x.shape[1] else view2data
-            smaller_data.x = F.pad(smaller_data.x, pad=(0, diff))
-            view1data.x = F.normalize(view1data.x)
-            view2data.x = F.normalize(view2data.x)
-        print(view1data)
-        print(view2data)
-        nodes = torch.tensor(np.arange(view1data.num_nodes), dtype=torch.long)
-        data = Data(nodes=nodes, edge_index1=view1data.edge_index, edge_index2=view2data.edge_index,
-                    edge_attr1=view1data.edge_attr, edge_attr2=view2data.edge_attr, 
-                    x1=view1data.x, x2=view2data.x, y=view1data.y,
-                    test_x = data.x, test_edge_index = data.edge_index, test_edge_attr = data.edge_attr,
+
+        data = Data(edge_index=data.edge_index, edge_attr= data.edge_attr, 
+                    x = data.x, y = data.y, 
                     train_mask=data.train_mask, val_mask=data.val_mask, test_mask=data.test_mask,
                     num_nodes=data.num_nodes)
         return [data]
