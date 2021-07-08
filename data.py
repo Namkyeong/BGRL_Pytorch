@@ -15,7 +15,6 @@ import utils
 def download_pyg_data(config):
     """
     Downloads a dataset from the PyTorch Geometric library
-
     :param config: A dict containing info on the dataset to be downloaded
     :return: A tuple containing (root directory, dataset name, data directory)
     """
@@ -37,7 +36,6 @@ def download_pyg_data(config):
 def download_data(root, name):
     """
     Download data from different repositories. Currently only PyTorch Geometric is supported
-
     :param root: The root directory of the dataset
     :param name: The name of the dataset
     :return:
@@ -99,7 +97,6 @@ class Dataset(InMemoryDataset):
     def process_full_batch_data(self, data):
         """
         Augmented view data generation using the full-batch data.
-
         :param view1data:
         :return:
         """
@@ -117,7 +114,6 @@ class Dataset(InMemoryDataset):
     def process(self):
         """
         Process either a full batch or cluster data.
-
         :return:
         """
         processed_path = osp.join(self.processed_dir, self.processed_file_names[0])

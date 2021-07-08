@@ -14,11 +14,6 @@ import numpy as np
 
 import torch
 
-# for clustering evaluation
-from sklearn import metrics
-from munkres import Munkres, print_matrix
-
-
 """
 The Following code is borrowed from SelfGNN
 """
@@ -62,7 +57,7 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", "-r", type=str, default="data",
                         help="Path to data directory, where all the datasets will be placed. Default is 'data'")
-    parser.add_argument("--name", "-n",type=str, default="cs",
+    parser.add_argument("--name", "-n",type=str, default="WikiCS",
                         help="Name of the dataset. Supported names are: cora, citeseer, pubmed, photo, computers, cs, and physics")
     parser.add_argument("--layers", "-l", nargs="+", default=[
                         512, 256], help="The number of units of each layer of the GNN. Default is [512, 128]")
@@ -84,8 +79,6 @@ def parse_args():
                         default=20, help="The number of epochs")
     parser.add_argument("--device", '-d', type=int,
                         default=0, help="GPU to use")
-    parser.add_argument("--task",type=str, default="node",
-                        help="downstream task. supported tasks : node classification, clustering")
     return parser.parse_args()
 
 
@@ -146,10 +139,8 @@ def create_masks(data):
     Splits data into training, validation, and test splits in a stratified manner if
     it is not already splitted. Each split is associated with a mask vector, which
     specifies the indices for that split. The data will be modified in-place
-
     :param data: Data object
     :return: The modified data
-
     """
     if not hasattr(data, "val_mask"):
 
@@ -186,63 +177,3 @@ def create_masks(data):
         data.val_mask = data.val_mask.T
     
     return data
-
-
-class clustering_metrics():
-    "from https://github.com/Ruiqi-Hu/ARGA"
-    def __init__(self, true_label, predict_label):
-        self.true_label = true_label
-        self.pred_label = predict_label
-
-
-    def clusteringAcc(self):
-        # best mapping between true_label and predict label
-        l1 = list(set(self.true_label))
-        numclass1 = len(l1)
-
-        l2 = list(set(self.pred_label))
-        numclass2 = len(l2)
-        if numclass1 != numclass2:
-            print('Class Not equal, Error!!!!')
-            return 0
-
-        cost = np.zeros((numclass1, numclass2), dtype=int)
-        for i, c1 in enumerate(l1):
-            mps = [i1 for i1, e1 in enumerate(self.true_label) if e1 == c1]
-            for j, c2 in enumerate(l2):
-                mps_d = [i1 for i1 in mps if self.pred_label[i1] == c2]
-
-                cost[i][j] = len(mps_d)
-
-        # match two clustering results by Munkres algorithm
-        m = Munkres()
-        cost = cost.__neg__().tolist()
-
-        indexes = m.compute(cost)
-
-        # get the match results
-        new_predict = np.zeros(len(self.pred_label))
-        for i, c in enumerate(l1):
-            # correponding label in l2:
-            c2 = l2[indexes[i][1]]
-
-            # ai is the index with label==c2 in the pred_label list
-            ai = [ind for ind, elm in enumerate(self.pred_label) if elm == c2]
-            new_predict[ai] = c
-
-        acc = metrics.accuracy_score(self.true_label, new_predict)
-        f1_macro = metrics.f1_score(self.true_label, new_predict, average='macro')
-        precision_macro = metrics.precision_score(self.true_label, new_predict, average='macro')
-        recall_macro = metrics.recall_score(self.true_label, new_predict, average='macro')
-        f1_micro = metrics.f1_score(self.true_label, new_predict, average='micro')
-        precision_micro = metrics.precision_score(self.true_label, new_predict, average='micro')
-        recall_micro = metrics.recall_score(self.true_label, new_predict, average='micro')
-        return acc, f1_macro, precision_macro, recall_macro, f1_micro, precision_micro, recall_micro
-
-    def evaluationClusterModelFromLabel(self):
-        nmi = metrics.normalized_mutual_info_score(self.true_label, self.pred_label)
-        adjscore = metrics.adjusted_rand_score(self.true_label, self.pred_label)
-        acc, f1_macro, precision_macro, recall_macro, f1_micro, precision_micro, recall_micro = self.clusteringAcc()
-
-        
-        return acc, nmi, adjscore

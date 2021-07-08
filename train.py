@@ -31,7 +31,7 @@ class ModelTrainer:
     def __init__(self, args):
         self._args = args
         self._init()
-        self.writer = SummaryWriter(log_dir="runs/BGRL_dataset({})_layers_({})".format(args.name, args.layers))
+        self.writer = SummaryWriter(log_dir="runs/BGRL_dataset({})".format(args.name))
 
     def _init(self):
         args = self._args
@@ -49,56 +49,6 @@ class ModelTrainer:
         scheduler = lambda epoch: epoch / 1000 if epoch < 1000 \
                     else ( 1 + np.cos((epoch-1000) * np.pi / (self._args.epochs - 1000))) * 0.5
         self._scheduler = optim.lr_scheduler.LambdaLR(self._optimizer, lr_lambda = scheduler)
-
-    def train_clustering(self):
-        # get initial test results
-        print("start training!")
-        print("Initial Evaluation...")
-        self.infer_embeddings()
-        acc_best, nmi_best, ari_best = self.evaluate_clustering()
-
-        # start training
-        self._model.train()
-        for epoch in range(self._args.epochs):
-            self._dataset.to(self._device)
-
-            augmentation = utils.Augmentation(float(self._args.aug_params[0]),float(self._args.aug_params[1]),float(self._args.aug_params[2]),float(self._args.aug_params[3]))
-            view1, view2 = augmentation._feature_masking(self._dataset, self._device)
-
-            v1_output, v2_output, loss = self._model(
-                x1=view1.x, x2=view2.x, edge_index_v1=view1.edge_index, edge_index_v2=view2.edge_index,
-                edge_weight_v1=view1.edge_attr, edge_weight_v2=view2.edge_attr)
-                
-            self._optimizer.zero_grad()
-            loss.backward()
-            self._optimizer.step()
-            self._scheduler.step()
-            self._model.update_moving_average()
-            sys.stdout.write('\rEpoch {}/{}, loss {:.4f}, lr {}'.format(epoch + 1, self._args.epochs, loss.data, self._optimizer.param_groups[0]['lr']))
-            sys.stdout.flush()
-            
-            if (epoch + 1) % self._args.cache_step == 0:
-                print("")
-                print("\nEvaluating {}th epoch..".format(epoch + 1))
-
-                self.infer_embeddings()
-                acc, nmi, ari = self.evaluate_clustering()
-
-                if acc_best < acc:
-                    acc_best = acc
-                if nmi_best < nmi:
-                    nmi_best = nmi
-                if ari_best < ari:
-                    ari_best = ari
-                
-                print("acc: {:.4f}, nmi: {:.4f}, ari: {:.4f}".format(acc, nmi, ari))
-
-        f = open("BGRL_dataset({})_clustering.txt".format(self._args.name), "a")
-        f.write("best acc : {} best nmi : {} best ari : {} \n".format(acc_best, nmi_best, ari_best))
-        f.close()
-
-        print()
-        print("Training Done!")
 
     def train(self):
         # get initial test results
@@ -157,6 +107,7 @@ class ModelTrainer:
         print()
         print("Training Done!")
         
+
     def infer_embeddings(self):
         
         self._model.train(False)
@@ -224,29 +175,10 @@ class ModelTrainer:
 
         return dev_acc, dev_std, test_acc, test_std
 
-    
-    def evaluate_clustering(self):
-
-        embeddings = self._embeddings.detach().cpu().numpy()
-        true_y = self._dataset.y.detach().cpu().numpy()
-
-        accs, nmis, aris = [], [], []
-
-        kmeans = KMeans(n_clusters = len(self._dataset.y.unique())).fit(embeddings)
-        pred_y = kmeans.labels_
-        cm = clustering_metrics(true_y, pred_y)
-        acc, nmi, ari = cm.evaluationClusterModelFromLabel()
-
-        return acc, nmi, ari
-
 
 def train_eval(args):
     trainer = ModelTrainer(args)
-    if args.task == "clustering":
-        trainer.train_clustering()
-    else :
-        trainer.train()
-        
+    trainer.train()    
     trainer.writer.close()
 
 
