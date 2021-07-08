@@ -1,17 +1,8 @@
-from torch_geometric.data import DataLoader
-
-from torch_geometric.utils import dropout_adj
-import torch_geometric.utils
-
 import numpy as np
 
 import torch
-from torch.optim.lr_scheduler import StepLR, ExponentialLR
 from torch import optim
 from tensorboardX import SummaryWriter
-
-from warmup_scheduler import GradualWarmupScheduler
-
 torch.manual_seed(0)
 
 import models
@@ -21,10 +12,6 @@ import data
 import os.path as osp
 import os
 import sys
-
-from utils import clustering_metrics
-from sklearn.cluster import KMeans
-
 
 class ModelTrainer:
 
