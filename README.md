@@ -4,12 +4,6 @@ Implementation of Bootstrapped Representation Learning on Graphs.
 A PyTorch implementation of "<a href="https://arxiv.org/pdf/2102.06514.pdf">Bootstrapped Representation Learning on Graphs</a>" paper, accepted in ICLR 2021 Workshop  
 <img src="img/model.PNG" width="700px"></img>
 
-## Evaluation options are added
-`--task:`  
-You can evaluate node classification or clustering of embeddings from BGRL method  
-For node classification :`--task node`  
-For clustering :`--task clustering`  
-  
 
 ## Hyperparameters for training BGRL
 Following Options can be passed to `train.py`
