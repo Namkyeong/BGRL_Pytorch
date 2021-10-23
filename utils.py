@@ -1,15 +1,11 @@
 from torch_geometric.datasets import Planetoid, Coauthor, Amazon, WikiCS
 from torch_geometric.utils import dropout_adj
 
-from collections import Counter
-
 import os.path as osp
 import os
 
-import subprocess
 import argparse
 
-import scipy.sparse as sp
 import numpy as np
 
 import torch

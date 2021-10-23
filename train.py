@@ -9,7 +9,6 @@ import models
 import utils
 import data
 
-import os.path as osp
 import os
 import sys
 

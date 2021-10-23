@@ -1,13 +1,9 @@
-from torch_geometric.data import Data, ClusterData, InMemoryDataset
-from torch_geometric.utils import subgraph
-import torch_geometric.transforms as T
-
-import numpy as np
-import torch.nn.functional as F
 import torch
+from torch_geometric.data import Data, InMemoryDataset
+import torch_geometric.transforms as T
+from torch_geometric.utils import to_undirected
 
 import os.path as osp
-import sys
 
 import utils
 
@@ -25,8 +21,11 @@ def download_pyg_data(config):
         DatasetClass = config["class"]
         if config["name"] == "WikiCS":
             dataset = DatasetClass(data_dir, transform=T.NormalizeFeatures())
+            std, mean = torch.std_mean(dataset.data.x, dim=0, unbiased=False)
+            dataset.data.x = (dataset.data.x - mean) / std
+            dataset.data.edge_index = to_undirected(dataset.data.edge_index)
         else :
-            dataset = DatasetClass(**config["kwargs"], transform = T.NormalizeFeatures())
+            dataset = DatasetClass(**config["kwargs"], transform=T.NormalizeFeatures())
         utils.create_masks(data=dataset.data)
         torch.save((dataset.data, dataset.slices), dst_path)
     
