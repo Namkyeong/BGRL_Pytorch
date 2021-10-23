@@ -31,6 +31,13 @@ usage example : `--aug_params 0.2 0.1 0.2 0.3`
 |predictor hidden size|512|512|512|512|512|
 * Hyperparameters are from original paper
 
+
+## Experimental Results
+|WikiCS|Am.Computers|Am.Photos|Co.CS|Co.Physics|
+|------|------------|---------|-----|----------| 
+|79.50 |88.21       |92.76    |92.49|94.89     |
+
+
 ## Codes borrowed from
 Codes are borrowed from BYOL and SelfGNN
 
