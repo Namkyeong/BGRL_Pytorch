@@ -56,12 +56,15 @@ class Encoder(nn.Module):
         self.bn1 = nn.BatchNorm1d(layer_config[1], momentum = 0.01)
         self.prelu1 = nn.PReLU()
         self.conv2 = GCNConv(layer_config[1],layer_config[2])
+        self.bn2 = nn.BatchNorm1d(layer_config[1], momentum = 0.01)
+        self.prelu2 = nn.PReLU()
 
     def forward(self, x, edge_index, edge_weight=None):
         
         x = self.conv1(x, edge_index, edge_weight=edge_weight)
         x = self.prelu1(self.bn1(x))
         x = self.conv2(x, edge_index, edge_weight=edge_weight)
+        x = self.prelu2(self.bn2(x))
 
         return x
 
@@ -81,7 +84,7 @@ class BGRL(nn.Module):
         set_requires_grad(self.teacher_encoder, False)
         self.teacher_ema_updater = EMA(moving_average_decay, epochs)
         rep_dim = layer_config[-1]
-        self.student_predictor = nn.Sequential(nn.Linear(rep_dim, pred_hid), nn.BatchNorm1d(pred_hid, momentum = 0.01), nn.PReLU(), nn.Linear(pred_hid, rep_dim))
+        self.student_predictor = nn.Sequential(nn.Linear(rep_dim, pred_hid), nn.PReLU(), nn.Linear(pred_hid, rep_dim))
         self.student_predictor.apply(init_weights)
     
     def reset_moving_average(self):
