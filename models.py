@@ -55,7 +55,7 @@ class Encoder(nn.Module):
         self.bn1 = nn.BatchNorm1d(layer_config[1], momentum = 0.01)
         self.prelu1 = nn.PReLU()
         self.conv2 = GCNConv(layer_config[1],layer_config[2])
-        self.bn2 = nn.BatchNorm1d(layer_config[1], momentum = 0.01)
+        self.bn2 = nn.BatchNorm1d(layer_config[2], momentum = 0.01)
         self.prelu2 = nn.PReLU()
 
     def forward(self, x, edge_index, edge_weight=None):
