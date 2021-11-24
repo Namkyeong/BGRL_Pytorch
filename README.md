@@ -10,8 +10,8 @@ Following Options can be passed to `train.py`
   
 
 `--layers:` or `-l:`
-one or more integer values specifying  the number of units for each GNN layer. Default is 512 128.  
-usage example :`--layers 512 128`  
+one or more integer values specifying  the number of units for each GNN layer. Default is 512 256.  
+usage example :`--layers 512 256`  
   
 
 `--aug_params:` or `-p:`
